@@ -17,6 +17,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { isValidProductUrl, extractUrlFromText } from '../utils/urlValidator';
 import { getRecentUrls } from '../utils/storage';
+import { saveInvoice, generateInvoiceId } from '../utils/warrantyStorage';
 import type { RootStackParamList } from '../navigation/types';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -82,7 +83,7 @@ export const ProductInputScreen: React.FC = () => {
     
     try {
       // Call backend to identify product using Gemini 2.5 Flash Vision
-      const BACKEND_URL = 'http://10.255.84.10:8000';
+      const BACKEND_URL = 'http://10.41.62.10:8000';
       
       // Convert local image to base64 for backend
       const imageBase64 = await fetch(imageUri)
@@ -201,19 +202,12 @@ export const ProductInputScreen: React.FC = () => {
       if (result.assets && result.assets[0]) {
         const file = result.assets[0];
         
-        // Check file type
-        if (file.mimeType === 'application/pdf') {
-          Alert.alert(
-            'PDF Support Coming Soon',
-            'PDF extraction is under development. Please use image invoices (JPEG/PNG) for now.',
-            [{ text: 'OK' }]
-          );
-          return;
-        }
+        // Determine file type
+        const isPdf = file.mimeType === 'application/pdf';
         
-        // For images, proceed with extraction
+        // Proceed with extraction for both PDFs and images
         setSelectedImage(file.uri);
-        await extractInvoiceData(file.uri);
+        await extractInvoiceData(file.uri, isPdf ? 'pdf' : 'image');
       }
     } catch (error) {
       console.error('Document picker error:', error);
@@ -221,21 +215,22 @@ export const ProductInputScreen: React.FC = () => {
     }
   };
 
-  const extractInvoiceData = async (imageUri: string) => {
+  const extractInvoiceData = async (fileUri: string, fileType: 'pdf' | 'image' = 'image') => {
     setExtractingInvoice(true);
     
     try {
-      const BACKEND_URL = 'http://10.255.84.10:8000';
+      const BACKEND_URL = 'http://10.41.62.10:8000';
       
-      // Convert image to base64
-      const imageBase64 = await fetch(imageUri)
+      // Convert file to base64
+      const fileBase64 = await fetch(fileUri)
         .then(res => res.blob())
         .then(blob => {
           return new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
             reader.onloadend = () => {
               const base64 = reader.result as string;
-              const base64Data = base64.split(',')[1];
+              // Remove data URL prefix if present
+              const base64Data = base64.includes(',') ? base64.split(',')[1] : base64;
               resolve(base64Data);
             };
             reader.onerror = reject;
@@ -243,46 +238,114 @@ export const ProductInputScreen: React.FC = () => {
           });
         });
       
+      // Add timeout for invoice extraction
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      
       const response = await fetch(`${BACKEND_URL}/extract-invoice`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          image_base64: imageBase64,
+          image_base64: fileBase64,
+          file_type: fileType,
         }),
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
 
       if (response.ok) {
         const data = await response.json();
         const invoice = data.invoice;
         
-        // Navigate to Invoice Details screen (NO product search)
+        // Build comprehensive specifications string from all available fields
+        let specsArray: string[] = [];
+        if (invoice.specifications && invoice.specifications !== 'N/A') {
+          specsArray.push(invoice.specifications);
+        }
+        if (invoice.model_sku_asin && invoice.model_sku_asin !== 'N/A') {
+          specsArray.push(`Model/SKU/ASIN: ${invoice.model_sku_asin}`);
+        }
+        if (invoice.hsn_code && invoice.hsn_code !== 'N/A') {
+          specsArray.push(`HSN Code: ${invoice.hsn_code}`);
+        }
+        if (invoice.quantity && invoice.quantity !== 'N/A') {
+          specsArray.push(`Quantity: ${invoice.quantity}`);
+        }
+        if (invoice.unit_price && invoice.unit_price !== 'N/A') {
+          specsArray.push(`Unit Price: ${invoice.unit_price}`);
+        }
+        if (invoice.discount && invoice.discount !== 'N/A' && invoice.discount !== '₹0.00') {
+          specsArray.push(`Discount: ${invoice.discount}`);
+        }
+        if (invoice.tax_rate && invoice.tax_rate !== 'N/A') {
+          specsArray.push(`Tax Rate: ${invoice.tax_rate} (${invoice.tax_type || ''})`);
+        }
+        
+        const fullSpecifications = specsArray.length > 0 
+          ? specsArray.join(' | ') 
+          : 'Not available';
+        
+        // Create invoice data object
+        const invoiceDataObj = {
+          product_name: invoice.product_name || 'Unknown',
+          brand: invoice.brand || 'Unknown',
+          store: invoice.store || 'Unknown',
+          purchase_date: invoice.purchase_date || invoice.order_date || 'Not specified',
+          price_paid: invoice.total_amount || invoice.price || 'Not specified',
+          specifications: fullSpecifications,
+          warranty_period: invoice.warranty || 'Not specified',
+          next_service_date: invoice.next_service || 'Not specified',
+          extracted_at: new Date().toISOString(),
+          image_uri: fileUri,
+          order_number: invoice.order_number,
+          invoice_number: invoice.invoice_number,
+          invoice_date: invoice.invoice_date,
+          net_amount: invoice.net_amount,
+          tax_amount: invoice.tax_amount,
+          model_sku_asin: invoice.model_sku_asin,
+          hsn_code: invoice.hsn_code,
+        };
+        
+        // Save invoice to storage
+        const invoiceId = generateInvoiceId();
+        await saveInvoice({
+          id: invoiceId,
+          type: 'invoice',
+          ...invoiceDataObj,
+        });
+        
+        // Navigate to Invoice Details screen
         navigation.navigate('InvoiceDetails', {
-          invoiceData: {
-            product_name: invoice.product_name || 'Unknown',
-            brand: invoice.brand || 'Unknown',
-            store: invoice.store || 'Unknown',
-            purchase_date: invoice.purchase_date || 'Not specified',
-            price_paid: invoice.price || 'Not specified',
-            specifications: invoice.specifications || 'Not available',
-            warranty_period: invoice.warranty || 'Not specified',
-            next_service_date: invoice.next_service || 'Not specified',
-            extracted_at: new Date().toISOString(),
-            image_uri: imageUri,
-          },
+          invoiceData: invoiceDataObj,
         });
       } else {
-        Alert.alert('Error', 'Could not extract data from invoice');
+        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        Alert.alert('Error', errorData.detail || 'Could not extract data from invoice');
       }
     } catch (error) {
       console.error('Invoice extraction error:', error);
-      Alert.alert('Error', 'Failed to extract invoice data');
+      let errorMessage = 'Failed to extract invoice data';
+      
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          errorMessage = 'Request timeout - extraction took too long. Please try again.';
+        } else if (error.message.includes('Network request failed') || error.message.includes('Failed to fetch')) {
+          errorMessage = 'Network error - cannot connect to server. Please check:\n1. Backend is running\n2. Phone and computer are on same network\n3. IP address is correct';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      Alert.alert('Error', errorMessage);
     } finally {
       setExtractingInvoice(false);
       setSelectedImage(null);
     }
   };
+
 
   const isValid = searchMode === 'url' ? isValidProductUrl(url) : productText.trim().length > 0;
 
@@ -508,6 +571,16 @@ export const ProductInputScreen: React.FC = () => {
             </TouchableOpacity>
           )}
         </View>
+
+        {/* Warranty List Button */}
+        <TouchableOpacity
+          style={styles.warrantyListButton}
+          onPress={() => navigation.navigate('WarrantyList')}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.warrantyListButtonIcon}>🛡️</Text>
+          <Text style={styles.warrantyListButtonText}>View All Invoices and Warranty</Text>
+        </TouchableOpacity>
 
         {/* Recent Searches */}
         {recentUrls.length > 0 && (
@@ -858,6 +931,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#10B981',
+  },
+  warrantyListButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#DBEAFE',
+    borderRadius: 10,
+    padding: 16,
+    marginTop: 20,
+    borderWidth: 2,
+    borderColor: '#3B82F6',
+  },
+  warrantyListButtonIcon: {
+    fontSize: 20,
+    marginRight: 8,
+  },
+  warrantyListButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1E40AF',
   },
 });
 

@@ -12,7 +12,7 @@ import type { RecommendationResponse } from '../types';
 import { getRecommendationsFromGemini } from './geminiService';
 
 // ⚠️ Backend running on computer - use IP address for phone access
-const BACKEND_URL = 'http://10.178.224.10:8000';
+const BACKEND_URL = 'http://10.247.204.10:8000';
 const BACKEND_TIMEOUT = 120000; // 120 seconds (2 min) - allows Gemini to enhance each product
 
 /**

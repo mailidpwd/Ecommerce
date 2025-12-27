@@ -7,6 +7,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ProductInputScreen } from './src/screens/ProductInputScreen';
 import { RecommendationScreen } from './src/screens/RecommendationScreen';
 import { InvoiceDetailsScreen } from './src/screens/InvoiceDetailsScreen';
+import { WarrantyDetailsScreen } from './src/screens/WarrantyDetailsScreen';
+import { WarrantyListScreen } from './src/screens/WarrantyListScreen';
 import type { RootStackParamList } from './src/navigation/types';
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -48,6 +50,20 @@ export default function App() {
           <Stack.Screen
             name="InvoiceDetails"
             component={InvoiceDetailsScreen}
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="WarrantyDetails"
+            component={WarrantyDetailsScreen}
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="WarrantyList"
+            component={WarrantyListScreen}
             options={{
               headerShown: false,
             }}

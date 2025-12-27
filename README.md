@@ -41,6 +41,22 @@ SimilarLinks/
 
 ---
 
+## Security
+
+**⚠️ IMPORTANT: API Keys**
+
+- All API keys are stored in `.env` files (not committed to git)
+- `.env` files are automatically ignored by `.gitignore`
+- Never commit API keys to version control
+- Use `.env.example` files as templates
+
+**Setup API Keys:**
+
+1. Copy `.env.example` to `.env` in the root directory
+2. Copy `backend/.env.example` to `backend/.env`
+3. Add your actual API keys to these files
+4. The `.env` files are already in `.gitignore` - they will NOT be committed
+
 ## Installation
 
 See [INSTALLATION.md](INSTALLATION.md) for complete setup instructions.

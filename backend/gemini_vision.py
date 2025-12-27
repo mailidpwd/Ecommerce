@@ -3,6 +3,15 @@ Gemini Vision API integration for product identification from images
 """
 
 import os
+from dotenv import load_dotenv
+
+# Force reload .env file to ensure we get the latest key (override system env vars)
+env_path = os.path.join(os.path.dirname(__file__), '.env')
+if os.path.exists(env_path):
+    load_dotenv(dotenv_path=env_path, override=True)
+else:
+    load_dotenv(override=True)  # Try loading from current directory
+
 import google.generativeai as genai
 from typing import Dict, Optional
 import httpx
@@ -19,6 +28,8 @@ current_key_index = 0
 primary_key = os.getenv("GEMINI_API_KEY")
 if primary_key:
     GEMINI_API_KEYS.append(primary_key)
+    masked_key = primary_key[:4] + "..." + primary_key[-4:] if len(primary_key) > 8 else "***"
+    print(f"✅ Gemini API key loaded in gemini_vision: {masked_key}")
 
 backup_key = os.getenv("GEMINI_API_KEY_BACKUP")
 if backup_key:
@@ -27,7 +38,7 @@ if backup_key:
 if not GEMINI_API_KEYS:
     raise ValueError(
         "GEMINI_API_KEY environment variable is required. "
-        "Set it using: export GEMINI_API_KEY='your-api-key'"
+        "Add it to backend/.env file: GEMINI_API_KEY=your-api-key"
     )
 
 # Configure Gemini with primary key

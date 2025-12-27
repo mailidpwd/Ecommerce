@@ -5,6 +5,15 @@ Much faster and more reliable than direct scraping
 """
 
 import os
+from dotenv import load_dotenv
+
+# Force reload .env file to ensure we get the latest key (override system env vars)
+env_path = os.path.join(os.path.dirname(__file__), '.env')
+if os.path.exists(env_path):
+    load_dotenv(dotenv_path=env_path, override=True)
+else:
+    load_dotenv(override=True)  # Try loading from current directory
+
 import requests
 import re
 import asyncio
@@ -17,7 +26,12 @@ SCRAPERAPI_KEY = os.getenv("SCRAPERAPI_KEY")
 if not SCRAPERAPI_KEY:
     print("⚠️  WARNING: SCRAPERAPI_KEY not set - will use fallback mode")
     print("⚠️  Get a free key from: https://www.scraperapi.com/")
+    print("⚠️  To set the key, create a .env file in the backend directory with: SCRAPERAPI_KEY=your_key_here")
     SCRAPERAPI_KEY = None  # Allow running without ScraperAPI (fallback mode)
+else:
+    # Mask the key for security (show first 4 and last 4 chars)
+    masked_key = SCRAPERAPI_KEY[:4] + "..." + SCRAPERAPI_KEY[-4:] if len(SCRAPERAPI_KEY) > 8 else "***"
+    print(f"✅ ScraperAPI key loaded: {masked_key}")
 SCRAPERAPI_ENDPOINT = "http://api.scraperapi.com"
 
 
@@ -46,6 +60,7 @@ async def scrape_product_scraperapi(url: str) -> Dict:
         return {'title': 'Product', 'price': None, 'image_url': '', 'specs': []}
     
     print(f"🚀 Scraping with ScraperAPI: {url}")
+    print(f"🔑 Using ScraperAPI key: {SCRAPERAPI_KEY[:4]}...{SCRAPERAPI_KEY[-4:] if SCRAPERAPI_KEY and len(SCRAPERAPI_KEY) > 8 else '***'}")
     
     source = detect_source(url)
     
@@ -63,12 +78,20 @@ async def scrape_product_scraperapi(url: str) -> Dict:
                     'country_code': 'in',  # Use India proxies
                     'premium': 'true',  # Use premium proxies for e-commerce
                 },
-                timeout=18  # 18 second timeout (some products are slow to scrape)
+                timeout=12  # 12 second timeout (reduced for faster failure)
             )
         )
         
         if response.status_code != 200:
-            raise Exception(f"ScraperAPI returned status {response.status_code}")
+            error_msg = f"ScraperAPI returned status {response.status_code}"
+            # Try to get error details from response
+            try:
+                error_text = response.text[:300] if response.text else "No error details"
+                error_msg += f": {error_text}"
+                print(f"❌ ScraperAPI Error Response: {error_text}")
+            except:
+                pass
+            raise Exception(error_msg)
         
         # Parse HTML
         soup = BeautifulSoup(response.text, 'html.parser')
@@ -296,6 +319,7 @@ async def search_product_scraperapi(product_name: str, source_site: str = 'amazo
         }
     
     print(f"🔍 Searching ScraperAPI for: {product_name} on {source_site}")
+    print(f"🔑 Using ScraperAPI key: {SCRAPERAPI_KEY[:4]}...{SCRAPERAPI_KEY[-4:] if SCRAPERAPI_KEY and len(SCRAPERAPI_KEY) > 8 else '***'}")
     
     # Build search URL
     if source_site == 'flipkart':
@@ -317,12 +341,19 @@ async def search_product_scraperapi(product_name: str, source_site: str = 'amazo
                     'country_code': 'in',
                     'premium': 'true',
                 },
-                timeout=15  # 15 second timeout for search (ensure reliability)
+                timeout=10  # 10 second timeout for search (faster failure)
             )
         )
         
         if response.status_code != 200:
-            print(f"⚠️  ScraperAPI returned status {response.status_code} for search")
+            error_msg = f"ScraperAPI returned status {response.status_code} for search"
+            try:
+                error_text = response.text[:300] if response.text else "No error details"
+                error_msg += f": {error_text}"
+                print(f"❌ ScraperAPI Search Error: {error_text}")
+            except:
+                pass
+            print(f"⚠️  {error_msg}")
             return None
         
         # Parse HTML

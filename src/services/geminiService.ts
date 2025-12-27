@@ -1,16 +1,34 @@
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
 import type { Product, RecommendationResponse } from '../types';
 
-// Gemini API Configuration - Read from environment variable
+// Gemini API Configuration - Read from environment variables
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+const GEMINI_API_KEY_BACKUP = process.env.EXPO_PUBLIC_GEMINI_API_KEY_BACKUP;
+const GEMINI_API_KEY_BACKUP2 = process.env.EXPO_PUBLIC_GEMINI_API_KEY_BACKUP2;
 
-if (!GEMINI_API_KEY) {
-  console.error('❌ EXPO_PUBLIC_GEMINI_API_KEY not found in environment!');
+// Build array of API keys
+const GEMINI_API_KEYS: string[] = [];
+if (GEMINI_API_KEY) {
+  GEMINI_API_KEYS.push(GEMINI_API_KEY);
+  console.log('✅ Loaded primary Gemini API key');
+}
+if (GEMINI_API_KEY_BACKUP) {
+  GEMINI_API_KEYS.push(GEMINI_API_KEY_BACKUP);
+  console.log('✅ Loaded backup Gemini API key 1');
+}
+if (GEMINI_API_KEY_BACKUP2) {
+  GEMINI_API_KEYS.push(GEMINI_API_KEY_BACKUP2);
+  console.log('✅ Loaded backup Gemini API key 2');
+}
+
+if (GEMINI_API_KEYS.length === 0) {
+  console.error('❌ No Gemini API keys found in environment!');
   throw new Error('Gemini API key is required. Please set EXPO_PUBLIC_GEMINI_API_KEY in .env file');
 }
 
-console.log('✅ Gemini API key loaded from environment');
-let genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+console.log(`📋 Total Gemini API keys loaded: ${GEMINI_API_KEYS.length}`);
+let currentKeyIndex = 0;
+let genAI = new GoogleGenerativeAI(GEMINI_API_KEYS[currentKeyIndex]);
 
 /**
  * Extract JSON from AI response
@@ -117,12 +135,12 @@ export async function getRecommendationsFromGemini(
 
   try {
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',  // Only this model works!
+      model: 'gemini-2.5-flash',  // Updated to match backend model
       generationConfig: {
         temperature: 0.5,
         topP: 0.95,
         topK: 40,
-        maxOutputTokens: 400000, // Higher for mobile (works better with thinking tokens)
+        maxOutputTokens: 8192, // Reduced from 400000 to match backend
       },
       safetySettings: [
         {

@@ -1,52 +1,3 @@
-node_modules/
-.expo/
-.expo-shared/
-dist/
-build/
-coverage/
-*.log
-*.tmp
-*.swp
-*.swo
-*.tsbuildinfo
-*.sqlite
-*.db
-*.db-journal
-
-# Environment files
-.env
-.env.*
-!.env.example
-
-# OS / editor
-.DS_Store
-Thumbs.db
-.idea/
-.vscode/
-
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-*.so
-.mypy_cache/
-.pytest_cache/
-.coverage
-.cache/
-.venv/
-venv/
-env/
-
-# Backend virtualenv
-backend/venv/
-
-# Expo / React Native caches
-.metro-cache/
-.bundle/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 # Expo
 .expo/
 .expo-shared/
@@ -96,3 +47,5 @@ backend/*.pyc
 backend/.pytest_cache/
 backend/venv/
 backend/.venv/
+backend/poppler/
+backend/backend/
